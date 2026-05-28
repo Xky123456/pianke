@@ -91,7 +91,7 @@ def test_launcher_cuda_torch_install_uses_pytorch_index_only(monkeypatch):
 
     calls = []
 
-    monkeypatch.setattr(launcher, "wants_cuda_backend", lambda modes: True)
+    monkeypatch.setattr(launcher, "wants_cuda_backend", lambda modes, runtime="auto": True)
     monkeypatch.setattr(launcher, "pip_uninstall", lambda packages: calls.append(("uninstall", packages, {})))
     monkeypatch.setattr(launcher, "info", lambda text: None)
 

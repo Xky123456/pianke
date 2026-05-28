@@ -3763,7 +3763,9 @@ def main():
         print(f"（脚本访问 token 已启用：X-Token: {SCRIPT_TOKEN[:8]}...）")
     if not args.no_browser:
         threading.Timer(0.8, lambda: webbrowser.open(url)).start()
-    app.run(host="0.0.0.0", port=args.port, debug=False)
+    # 仅监听回环：前端依赖 Origin/Referer 严格匹配防 CSRF，绑 0.0.0.0
+    # 会把局域网也暴露进来，已被验证会绕过这套校验。
+    app.run(host="127.0.0.1", port=args.port, debug=False)
 
 
 if __name__ == "__main__":

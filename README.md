@@ -125,9 +125,15 @@ python app.py --port 8080 --no-browser
 
 ### 归档模式
 
-你可以在首页的“更多选项”中选择以下归档模式：
+你可以在首页的”更多选项”中选择以下归档模式：
 - **移动模式（默认，推荐）**：将原片直接移动到 `winners/` 或 `losers/` 目录。最省磁盘空间，符合一次性选片直觉。反悔时文件会无损搬回原位。
 - **复制模式**：原片保持不动，在 `winners/` 和 `losers/` 中创建副本。需要双倍磁盘空间。
+
+### 初筛强度
+
+在”更多选项”里还可以选择初筛强度：
+- **标准**：阈值较宽，只剔除明显废片，适合不放心 AI 判断时使用。
+- **进阶（默认推荐）**：阈值更严，能多拒一些疑似废片，进入擂台的图片更少。所有被淘汰的图都可以在复核页或完成页召回。
 
 ---
 
@@ -163,12 +169,12 @@ python app.py --port 8080 --no-browser
 
 <details>
 <summary><b>2. 默认的 5057 端口被占用怎么办？</b></summary>
-在启动前设置环境变量改变端口：
+一键启动器读环境变量 <code>PIC_SELECTER_PORT</code>。在启动前设置后再运行启动器：
 <ul>
   <li>macOS: <code>export PIC_SELECTER_PORT=8080</code></li>
   <li>Windows: <code>set PIC_SELECTER_PORT=8080</code></li>
 </ul>
-后再运行启动器。
+手动启动（<code>python app.py</code>）则直接传 <code>--port 8080</code>。
 </details>
 
 <details>

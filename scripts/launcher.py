@@ -159,12 +159,13 @@ def save_install(data: dict) -> None:
 # ---------- 模式选择 ----------
 
 def ask_modes(previous: list[str] | None) -> list[str]:
-    print()
+    # 已有历史配置：直接沿用，不阻塞用户。换模式靠删 .pic_selecter_install.json。
     if previous:
-        print(f"上次启用的模式：{', '.join(previous)}")
-        print("直接回车 = 沿用；否则请重新选择。")
-    else:
-        print("第一次运行，请选择要启用的模式（可多选，逗号或空格分隔）：")
+        info(f"使用上次配置的模式：{', '.join(previous)}")
+        return previous
+
+    print()
+    print("第一次运行，请选择要启用的模式（可多选，逗号或空格分隔）：")
 
     print()
     keys = ["fast", "expert", "tycoon"]
@@ -178,8 +179,6 @@ def ask_modes(previous: list[str] | None) -> list[str]:
         except EOFError:
             raw = ""
 
-        if not raw and previous:
-            return previous
         if not raw:
             print("请至少选一个。")
             continue
@@ -205,12 +204,13 @@ def ask_modes(previous: list[str] | None) -> list[str]:
 
 
 def ask_runtime(previous: str | None) -> str:
-    print()
+    # 已有历史配置：直接沿用。
     if previous:
-        print(f"上次运行时设备偏好：{previous}")
-        print("直接回车 = 沿用；否则请选择。")
-    else:
-        print("请选择本地运行时设备偏好：")
+        info(f"使用上次配置的运行设备：{previous}")
+        return previous
+
+    print()
+    print("请选择本地运行时设备偏好：")
 
     print()
     print("  1) auto  自动（检测到可用 GPU 就优先用）")
@@ -224,8 +224,6 @@ def ask_runtime(previous: str | None) -> str:
         except EOFError:
             raw = ""
 
-        if not raw and previous:
-            return previous
         if raw in {"auto", "cpu", "gpu"}:
             return raw
         if raw in mapping:
@@ -490,10 +488,14 @@ def packages_for_modes(modes: list[str]) -> list[str]:
     return list(seen.keys())
 
 
-def wants_cuda_backend(modes: list[str]) -> bool:
+def wants_cuda_backend(modes: list[str], runtime: str = "auto") -> bool:
     if not any(m in {"expert", "tycoon"} for m in modes):
         return False
     if os.environ.get("PIANKE_FORCE_CPU", "0") == "1":
+        return False
+    # 用户明确选了 CPU：不装 CUDA 依赖，省 2GB 下载。
+    # （runtime=gpu 仍按 nvidia-smi 探测；没卡装了也是浪费。）
+    if runtime == "cpu":
         return False
     return shutil.which("nvidia-smi") is not None
 
@@ -504,10 +506,10 @@ def pip_uninstall(packages: list[str]) -> None:
     subprocess.call([str(PY_IN_VENV), "-m", "pip", "uninstall", "-y", *packages])
 
 
-def ensure_runtime_backends(modes: list[str]) -> str:
+def ensure_runtime_backends(modes: list[str], runtime: str = "auto") -> str:
     if not any(m in {"expert", "tycoon"} for m in modes):
         return "none"
-    if wants_cuda_backend(modes):
+    if wants_cuda_backend(modes, runtime):
         info(f"检测到 NVIDIA GPU，安装 CUDA 版 PyTorch（{PYTORCH_CUDA_FLAVOR}）+ ONNX Runtime GPU")
         pip_uninstall(["onnxruntime", "onnxruntime-gpu", "onnxruntime-directml", "torch", "torchvision", "torchaudio"])
         pip_install(
@@ -533,11 +535,12 @@ def ensure_runtime_backends(modes: list[str]) -> str:
 
 
 def ensure_dependencies(modes: list[str], install: dict, force: bool) -> None:
-    """按模式列表安装依赖。已装过且模式未变则跳过。"""
+    """按模式列表安装依赖。已装过且模式/runtime 未变则跳过。"""
+    runtime = (install.get("runtime") or "auto").strip().lower()
     packages = packages_for_modes(modes)
     backend_sig = "none"
     if any(m in {"expert", "tycoon"} for m in modes):
-        backend_sig = f"vision:{'cuda' if wants_cuda_backend(modes) else 'cpu'}:{PYTORCH_CUDA_FLAVOR}"
+        backend_sig = f"vision:{'cuda' if wants_cuda_backend(modes, runtime) else 'cpu'}:{PYTORCH_CUDA_FLAVOR}"
     sig = "|".join(sorted(packages + [backend_sig]))
     last_sig = install.get("packages_sig")
     if not force and last_sig == sig and PY_IN_VENV.exists():
@@ -546,7 +549,7 @@ def ensure_dependencies(modes: list[str], install: dict, force: bool) -> None:
 
     est = "、".join(f"{m}（{MODE_TIME_ESTIMATE[m]}）" for m in modes)
     info(f"准备安装 {len(packages)} 个 pip 包，预计耗时：{est}")
-    runtime_backend = ensure_runtime_backends(modes)
+    runtime_backend = ensure_runtime_backends(modes, runtime)
     pip_install(packages)
     install["packages_sig"] = sig
     install["modes"] = modes
@@ -597,19 +600,22 @@ def main() -> int:
         die(f"未找到 app.py（期望路径：{ROOT / 'app.py'}）。请确认启动器放在项目根目录。")
 
     install = load_install()
+    is_first_run = not (install.get("modes") and install.get("runtime"))
 
     # 步骤 1：检查更新
     step(1, 4, "检查 GitHub 更新")
     check_and_apply_update(install)
 
-    # 步骤 2：选择模式
-    step(2, 4, "选择运行模式")
+    # 步骤 2：选择模式 / 运行设备
+    # 已配置过的用户：直接沿用上次选择，零交互启动。想换配置请删
+    # .pic_selecter_install.json 后重新双击启动器。
+    step(2, 4, "选择运行模式" if is_first_run else "沿用上次配置")
+    if not is_first_run:
+        info("（如需重新选择模式或设备，请删除 .pic_selecter_install.json 后重启）")
     prev_modes = install.get("modes") or []
     modes = ask_modes(prev_modes)
-    info(f"本次启用：{', '.join(modes)}")
     install["modes"] = modes
     runtime = ask_runtime(install.get("runtime"))
-    info(f"运行时设备偏好：{runtime}")
     install["runtime"] = runtime
     save_install(install)
 
