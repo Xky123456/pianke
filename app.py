@@ -1685,7 +1685,7 @@ def _job_event(name: str, path: str, info, reason) -> None:
             {"kind": "skip", "label": "—", "value": "—"},
         ]
     elif engine == "fast":
-        # 三列：hash 摘要 / HSV 颜色指纹 / ORB 关键点数 + 锐度
+        # 三列：指纹 / 色调 / 细节
         ph = (info.phash or "")[:4]
         dh = (info.dhash or "")[:4]
         hash_val = f"{ph}·{dh}" if (ph and dh) else "—"
@@ -1695,44 +1695,43 @@ def _job_event(name: str, path: str, info, reason) -> None:
         orb_val = f"{orb_n}pt" if orb_n else "数据不足"
         sharp_val = f"分 {sharp:.0f}" if sharp is not None else "—"
         signals = [
-            {"kind": "hash", "label": "hash", "value": hash_val},
-            {"kind": "color", "label": "HSV", "value": color_val},
-            {"kind": "orb", "label": "ORB", "value": f"{orb_val} · {sharp_val}"},
+            {"kind": "hash", "label": "指纹", "value": hash_val},
+            {"kind": "color", "label": "色调", "value": color_val},
+            {"kind": "orb", "label": "细节", "value": f"{orb_val} · {sharp_val}"},
         ]
     elif engine == "tycoon":
         dv = getattr(info, "dinov2", None)
-        dino_val = f"feat {dv.shape[0]}d" if dv is not None else "缺失"
+        dino_val = "已建" if dv is not None else "缺失"
         verdict_llm = getattr(info, "llm_verdict", None) or q.get("llm_verdict")
         reason_llm = getattr(info, "llm_reason", None) or q.get("llm_reason") or ""
         if verdict_llm:
             llm_val = f"{verdict_llm.upper()} · {reason_llm}" if reason_llm else verdict_llm.upper()
         elif q.get("auto_reject"):
-            # 没 LLM 判定但已被 auto_reject → 是极速进阶版预审拒掉的，LLM 就没跑
-            llm_val = "初筛不通过，LLM 无需介入"
+            llm_val = "初筛已淘汰，无需进一步判定"
         else:
             llm_val = "缺失"
         fe = getattr(info, "face_embeddings", None) or []
         face_val = f"脸×{len(fe)}" if fe else "无脸"
         signals = [
-            {"kind": "dino", "label": "DINOv2", "value": dino_val},
-            {"kind": "llm", "label": "🤖 LLM", "value": llm_val},
+            {"kind": "dino", "label": "画面", "value": dino_val},
+            {"kind": "llm", "label": "🤖 判图", "value": llm_val},
             {"kind": "face", "label": "脸", "value": face_val},
         ]
     else:  # expert
         dv = getattr(info, "dinov2", None)
-        dino_val = f"feat {dv.shape[0]}d" if dv is not None else "缺失"
+        dino_val = "已建" if dv is not None else "缺失"
         aes = getattr(info, "aesthetic_score", None)
         musiq = getattr(info, "musiq_score", None)
         clip = getattr(info, "clipiqa_score", None)
         parts = []
-        if aes is not None: parts.append(f"N{aes:.1f}")
-        if musiq is not None: parts.append(f"M{musiq:.0f}")
-        if clip is not None: parts.append(f"C{clip:.2f}")
+        if aes is not None: parts.append(f"美{aes:.1f}")
+        if musiq is not None: parts.append(f"质{musiq:.0f}")
+        if clip is not None: parts.append(f"调{clip:.2f}")
         aes_val = "·".join(parts) if parts else "缺失"
         fe = getattr(info, "face_embeddings", None) or []
         face_val = f"脸×{len(fe)}" if fe else "无脸"
         signals = [
-            {"kind": "dino", "label": "DINOv2", "value": dino_val},
+            {"kind": "dino", "label": "画面", "value": dino_val},
             {"kind": "nima", "label": "美学", "value": aes_val},
             {"kind": "face", "label": "脸", "value": face_val},
         ]
@@ -1991,11 +1990,11 @@ def _run_job(folder: str, dry_run: bool, mode: str, wipe_cache: bool,
 
         job.status = "hashing"
         if engine == "fast":
-            job.label = "扫描与计算指纹（pHash + dHash + wHash + aHash + HSV + ORB）..."
+            job.label = "正在扫描照片、计算每张图的画面指纹..."
         elif engine == "tycoon":
-            job.label = f"扫描 + DINOv2 + InsightFace + LLM 初筛（模型: {llm_model}）..."
+            job.label = "正在扫描照片、用云端视觉能力做初筛..."
         else:
-            job.label = "扫描与计算 pHash + DINOv2 + NIMA/MUSIQ/CLIP + 人脸嵌入..."
+            job.label = "正在扫描照片、识别画面与人脸、评估质量..."
         infos, skipped = grouper.compute_infos(
             folder,
             progress=_job_progress,

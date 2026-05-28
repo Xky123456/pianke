@@ -563,9 +563,9 @@ def ensure_dependencies(modes: list[str], install: dict, force: bool) -> None:
 def run_app(port: int) -> int:
     info(f"启动 Flask 服务于 http://localhost:{port}")
     if "expert" in (load_install().get("modes") or []):
-        info("专家模式首次启动会加载 DINOv2/NIMA/InsightFace 模型（约 10-30 秒）...")
+        info("专家模式首次启动会加载本地辅助数据（约 10-30 秒）...")
         if USE_MIRROR:
-            info(f"使用 HuggingFace 镜像 {HF_MIRROR}（如已下载过模型则跳过）")
+            info(f"使用国内镜像加速首次下载（如已准备过则跳过）")
     print()
     print("=" * 56)
     print("  服务启动后浏览器会自动打开。")
